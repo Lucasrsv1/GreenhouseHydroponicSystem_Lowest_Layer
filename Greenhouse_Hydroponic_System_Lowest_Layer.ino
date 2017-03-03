@@ -21,15 +21,12 @@ int controles = 0;
 // Debug LED pin, set negative to disable debug
 const unsigned int debugPin = 13;
 
-/* Debug information code
- *  -2: don't using debug
- *  -1: system suspended
- *   0: system started
- *   1: command received
- *   2: answer sent
- *   3: data sent
- */
+// Debug information code
 int debugCode = -2;
+
+// Number of blinks
+int debugBlinks = 1;
+int remainingBlinks = 0;
 
 // Interval to toggle debug LED
 int debugInterval = -1;
@@ -39,6 +36,9 @@ unsigned long lastDebug = 0;
 
 // Is system suspended?
 bool suspended;
+
+// Validated handshake
+int handshake;
 
 int Checksum (byte input[]) {
 	int checksum = 0;
@@ -52,6 +52,7 @@ int Checksum (byte input[]) {
 void setup() {
 	Serial.begin(baud);
 	suspended = true;
+	handshake = 0;
 
 	// Start debug
 	if (debugPin >= 0) {
@@ -69,7 +70,13 @@ void loop() {
 		unsigned long time = millis();
 		if (time - lastDebug >= debugInterval) {
 			digitalWrite(debugPin, !digitalRead(debugPin));
-			lastDebug = time;
+			if (remainingBlinks <= 1) {
+				lastDebug = time;
+				remainingBlinks = debugBlinks * 2;
+			} else {
+				remainingBlinks--;
+				lastDebug = time - debugInterval + 200;
+			}
 		}
 	}
 }
@@ -85,38 +92,56 @@ void serialEvent () {
 		if (inputByte[0] == 16) {
 			SetDebugCode(1);
 
-			// Detect which command was received
-			switch (inputByte[1]) {
-				case 126:
-					SetDebugCode(-1);
-					suspended = true;
-					break;
-				case 127:
-					byte bytesArray[3];
-					bytesArray[0] = inputByte[2];
-					bytesArray[1] = inputByte[3];
-					bytesArray[2] = inputByte[4];
+			int validateCode;
+			byte validateBytes[6];
 
-					int checksum;
-					checksum = Checksum(bytesArray);
-					Serial.println("Hello from Arduino running Greenhouse_Hydroponic_System_Lowest_Level [" + String(checksum) + "]");
-					suspended = false;
-					SetDebugCode(0);
-					break;
-				case 128:
-					break;
-				case 129:
-					break;
-				case 130:
-					break;
-				case 131:
-					break;
-				case 132:
-					break;
-				case 133:
-					break;
-				case 134:
-					break;
+			if (!suspended) {
+				for (int v = 0; v < 5; v++)
+					validateBytes[v] = inputByte[v];
+
+				validateBytes[5] = handshake;
+				validateCode = Checksum(validateBytes);
+			}
+
+			if (inputByte[5] == validateCode || suspended) {
+				// Detect which command was received
+				switch (inputByte[1]) {
+					case 126:
+						SetDebugCode(-1);
+						suspended = true;
+						handshake = 0;
+						break;
+					case 127:
+						byte bytesArray[3];
+						bytesArray[0] = inputByte[2];
+						bytesArray[1] = inputByte[3];
+						bytesArray[2] = inputByte[4];
+
+						int checksum;
+						checksum = Checksum(bytesArray);
+						Serial.println("Hello from Arduino running Greenhouse_Hydroponic_System_Lowest_Layer [" + String(checksum) + "]");
+						suspended = false;
+						handshake = checksum;
+						SetDebugCode(0);
+						break;
+					case 128:
+						break;
+					case 129:
+						break;
+					case 130:
+						break;
+					case 131:
+						break;
+					case 132:
+						break;
+					case 133:
+						break;
+					case 134:
+						break;
+				}
+			} else {
+				// Command not validated
+				SetDebugCode(3);
 			}
 
 			// Clear message bytes
@@ -126,6 +151,15 @@ void serialEvent () {
 	}
 }
 
+/* Set debug information code
+*  -2: don't using debug
+*  -1: system suspended
+*   0: system started
+*   1: command received
+*   2: answer sent
+*   3: command not validated
+*   4: data sent
+*/
 void SetDebugCode (int code) {
 	// Use LED to debug
 	if (debugPin >= 0) {
@@ -134,20 +168,27 @@ void SetDebugCode (int code) {
 			case -1:
 				digitalWrite(debugPin, LOW);
 				debugInterval = -1;
+				debugBlinks = 0;
 				break;
 			case 0:
 				digitalWrite(debugPin, HIGH);
 				debugInterval = -1;
+				debugBlinks = 0;
 				break;
 			case 1:
 				digitalWrite(debugPin, LOW);
-				debugInterval = 500;
+				debugBlinks = 1;
+				debugInterval = 1000;
 				break;
 			case 2:
 				digitalWrite(debugPin, HIGH);
-				debugInterval = 1000;
+				debugBlinks = 2;
+				debugInterval = 1500;
 				break;
 			case 3:
+				digitalWrite(debugPin, HIGH);
+				debugBlinks = 3;
+				debugInterval = 1500;
 				break;
 			default:
 				break;
