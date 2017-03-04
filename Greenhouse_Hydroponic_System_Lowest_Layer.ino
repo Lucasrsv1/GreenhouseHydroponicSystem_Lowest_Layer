@@ -40,9 +40,9 @@ bool suspended;
 // Validated handshake
 int handshake;
 
-int Checksum (byte input[]) {
+int Checksum (byte input[], int size) {
 	int checksum = 0;
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < size; i++)
 		checksum += input[i];
 
 	checksum &= 0xFF;
@@ -100,7 +100,7 @@ void serialEvent () {
 					validateBytes[v] = inputByte[v];
 
 				validateBytes[5] = handshake;
-				validateCode = Checksum(validateBytes);
+				validateCode = Checksum(validateBytes, 6);
 			}
 
 			if (inputByte[5] == validateCode || suspended) {
@@ -118,7 +118,7 @@ void serialEvent () {
 						bytesArray[2] = inputByte[4];
 
 						int checksum;
-						checksum = Checksum(bytesArray);
+						checksum = Checksum(bytesArray, 3);
 						Serial.println("Hello from Arduino running Greenhouse_Hydroponic_System_Lowest_Layer [" + String(checksum) + "]");
 						suspended = false;
 						handshake = checksum;
