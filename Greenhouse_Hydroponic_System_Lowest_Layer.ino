@@ -18,6 +18,10 @@ byte inputByte[6];
 int estatisticas = 0;
 int controles = 0;
 
+// Controllers
+int pin = 0;
+int estado = LOW;
+
 // Debug LED pin, set negative to disable debug
 const unsigned int debugPin = 13;
 
@@ -52,7 +56,7 @@ int Checksum (byte input[], int size) {
 void setup() {
 	Serial.begin(baud);
 	suspended = true;
-	handshake = 0;
+	handshake = estatisticas = controles = 0;
 
 	// Start debug
 	if (debugPin >= 0) {
@@ -93,44 +97,62 @@ void serialEvent () {
 			SetDebugCode(1);
 
 			int validateCode;
-			byte validateBytes[6];
 
-			if (!suspended) {
-				for (int v = 0; v < 5; v++)
-					validateBytes[v] = inputByte[v];
+			if (!suspended)
+				validateCode = Validate(true);
 
-				validateBytes[5] = handshake;
-				validateCode = Checksum(validateBytes, 6);
-			}
-
-			if (inputByte[5] == validateCode || suspended) {
+			if (inputByte[5] == validateCode || suspended || inputByte[1] == 127) {
 				// Detect which command was received
 				switch (inputByte[1]) {
 					case 126:
 						SetDebugCode(-1);
 						suspended = true;
-						handshake = 0;
+						handshake = estatisticas = controles = 0;
 						break;
 					case 127:
-						byte bytesArray[3];
-						bytesArray[0] = inputByte[2];
-						bytesArray[1] = inputByte[3];
-						bytesArray[2] = inputByte[4];
+						validateCode = Validate(false);
+						if (inputByte[5] == validateCode) {
+							byte bytesArray[3];
+							bytesArray[0] = inputByte[2];
+							bytesArray[1] = inputByte[3];
+							bytesArray[2] = inputByte[4];
 
-						int checksum;
-						checksum = Checksum(bytesArray, 3);
-						Serial.println("Hello from Arduino running Greenhouse_Hydroponic_System_Lowest_Layer [" + String(checksum) + "]");
-						suspended = false;
-						handshake = checksum;
-						SetDebugCode(0);
+							int checksum;
+							checksum = Checksum(bytesArray, 3);
+							Serial.println("Hello from Arduino running Greenhouse_Hydroponic_System_Lowest_Layer [" + String(checksum) + "]");
+							suspended = false;
+							handshake = checksum;
+							SetDebugCode(0);
+						} else {
+							SetDebugCode(3);
+						}
 						break;
 					case 128:
+						estatisticas = inputByte[2];
+						controles = inputByte[3];
+						Serial.println("plan received");
+						SetDebugCode(2);
 						break;
 					case 129:
+						pin = inputByte[2];
+						estado = (inputByte[3] == 0) ? LOW : HIGH;
+
+						pinMode(pin, OUTPUT);
+						digitalWrite(pin, estado);
+						Serial.println("new controller pin " + String(pin) + (estado == LOW ? " OFF" : " ON") + " initialized");
+						SetDebugCode(2);
 						break;
 					case 130:
 						break;
 					case 131:
+						int id;
+						id = inputByte[2];
+						pin = inputByte[3];
+						estado = (inputByte[4] == 0) ? LOW : HIGH;
+
+						digitalWrite(pin, estado);
+						Serial.println("order " + String(id) + ": set pin " + String(pin) + (estado == LOW ? " OFF" : " ON") + " executed");
+						SetDebugCode(2);
 						break;
 					case 132:
 						break;
@@ -149,6 +171,17 @@ void serialEvent () {
 				inputByte[b2] = 0;
 		}
 	}
+}
+
+// Validate a command using the checksum for the 5 significant bytes + optional handshake
+int Validate (bool includeHS) {
+	byte validateBytes[6];
+	for (int v = 0; v < 5; v++)
+		validateBytes[v] = inputByte[v];
+
+	validateBytes[5] = (includeHS) ? handshake : 0;
+
+	return Checksum(validateBytes, 6);
 }
 
 /* Set debug information code
@@ -181,12 +214,12 @@ void SetDebugCode (int code) {
 				debugInterval = 1000;
 				break;
 			case 2:
-				digitalWrite(debugPin, HIGH);
+				digitalWrite(debugPin, LOW);
 				debugBlinks = 2;
 				debugInterval = 1500;
 				break;
 			case 3:
-				digitalWrite(debugPin, HIGH);
+				digitalWrite(debugPin, LOW);
 				debugBlinks = 3;
 				debugInterval = 1500;
 				break;
