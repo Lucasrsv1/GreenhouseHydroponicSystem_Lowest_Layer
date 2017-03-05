@@ -5,10 +5,10 @@
  * The comunication protocol can be found in the C# application documentation.
  * Before building this software in an Arduino board, check the baud rate specified below,
  * because this value must be used in the C# application connection configuration.
- * 
+ *
  */
 
-// Baud Rate used in the comunication
+ // Baud Rate used in the comunication
 const unsigned int baud = 9600;
 
 // Protocol bytes
@@ -75,6 +75,7 @@ void loop() {
 		if (time - lastDebug >= debugInterval) {
 			digitalWrite(debugPin, !digitalRead(debugPin));
 			if (remainingBlinks <= 1) {
+				digitalWrite(debugPin, LOW);
 				lastDebug = time;
 				remainingBlinks = debugBlinks * 2;
 			} else {
@@ -134,15 +135,25 @@ void serialEvent () {
 						SetDebugCode(2);
 						break;
 					case 129:
-						pin = inputByte[2];
-						estado = (inputByte[3] == 0) ? LOW : HIGH;
+						if (controles > 0) {
+							pin = inputByte[2];
+							estado = (inputByte[3] == 0) ? LOW : HIGH;
 
-						pinMode(pin, OUTPUT);
-						digitalWrite(pin, estado);
-						Serial.println("new controller pin " + String(pin) + (estado == LOW ? " OFF" : " ON") + " initialized");
-						SetDebugCode(2);
+							pinMode(pin, OUTPUT);
+							digitalWrite(pin, estado);
+							Serial.println("new controller pin " + String(pin) + (estado == LOW ? " OFF" : " ON") + " initialized");
+							controles--;
+							SetDebugCode(2);
+						} else {
+							SetDebugCode(5);
+						}
 						break;
 					case 130:
+						if (estatisticas > 0) {
+
+						} else {
+							SetDebugCode(6);
+						}
 						break;
 					case 131:
 						int id;
@@ -185,14 +196,16 @@ int Validate (bool includeHS) {
 }
 
 /* Set debug information code
-*  -2: don't using debug
-*  -1: system suspended
-*   0: system started
-*   1: command received
-*   2: answer sent
-*   3: command not validated
-*   4: data sent
-*/
+ *  -2: don't using debug
+ *  -1: system suspended
+ *   0: system started
+ *   1: command received
+ *   2: answer sent
+ *   3: command not validated
+ *   4: data sent
+ *   5: controllers limit reached
+ *   6: statistics limit reached
+ */
 void SetDebugCode (int code) {
 	// Use LED to debug
 	if (debugPin >= 0) {
@@ -222,6 +235,21 @@ void SetDebugCode (int code) {
 				digitalWrite(debugPin, LOW);
 				debugBlinks = 3;
 				debugInterval = 1500;
+				break;
+			case 4:
+				digitalWrite(debugPin, HIGH);
+				debugBlinks = 4;
+				debugInterval = 1500;
+				break;
+			case 5:
+				digitalWrite(debugPin, LOW);
+				debugBlinks = 5;
+				debugInterval = 2000;
+				break;
+			case 6:
+				digitalWrite(debugPin, LOW);
+				debugBlinks = 6;
+				debugInterval = 2000;
 				break;
 			default:
 				break;
