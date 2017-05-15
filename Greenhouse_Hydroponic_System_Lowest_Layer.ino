@@ -196,7 +196,7 @@ int Validate (bool includeHS) {
 }
 
 /* Set debug information code
- *  -2: don't using debug
+ *  -2: don't use debug
  *  -1: system suspended
  *   0: system started
  *   1: command received
